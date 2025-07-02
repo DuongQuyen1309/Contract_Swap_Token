@@ -29,23 +29,22 @@ describe("SwapToken", function () {
     console.log("tk1",myToken1.target);
     console.log("tk2",myToken2.target);
     console.log("swapToken",swapToken.target);
-    await swapToken.addToken(myToken1.target, myToken2.target, 2);
+    await swapToken.addToken(myToken1.target, myToken2.target, 3);
     console.log("transfer tokens");
   });
 
   it("should swap tokens", async function () {
-    await myToken1.connect(addr1).approve(swapToken.target, 50);
-    await myToken2.connect(addr1).approve(swapToken.target, 50);
+    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
     console.log("balanceOfMyToken1before", await myToken1.balanceOf(swapToken.target));
     console.log("balanceOfMyToken2before", await myToken2.balanceOf(swapToken.target));
-    await swapToken.connect(addr1).swapToken(myToken1.target, myToken2.target, 10);
+    await swapToken.connect(addr1).swapToken(myToken1.target,myToken2.target, 10, {value: ethers.parseEther("0.001")});
     console.log("balanceOfMyToken1after", await myToken1.balanceOf(swapToken.target));
     console.log("balanceOfMyToken2after", await myToken2.balanceOf(swapToken.target));
     const balance1 = await myToken1.balanceOf(swapToken.target);
     const balance2 = await myToken2.balanceOf(swapToken.target);
 
-    expect(balance1).to.equal(50000000000000000010n); 
-    expect(balance2).to.equal(49999999999999999986n);
-
+    expect(balance1).to.equal(60000000000000000000n); 
+    expect(balance2).to.equal(36000000000000000000n);
   });
 });
