@@ -19,6 +19,6 @@ contract MyToken2 is ERC20 {
         return soldTokens;
     }
     function transferOut(address to, uint256 amount) external {
-    _transfer(address(this), to, amount * (10 ** uint256(decimals())));
+    _transfer(address(this), to, amount);
 }
 }
