@@ -10,7 +10,6 @@ contract SwapToken {
     event TokenSwapEvent(address _fromToken, address _toToken, uint256 _fromAmount, uint256 _toAmount);  
     event ChangeRateEvent(address _fromToken, address _toToken, uint256 _rate);
     event ChangeFeeEvent(address _contractAddress, uint256 _fee);
-    event AddTokenIntoContract(address _fromToken, address _toToken, uint256 _rate);
 
     constructor() {
         contractOwner = payable(msg.sender);
@@ -22,14 +21,10 @@ contract SwapToken {
         _;
     }
 
-    function addToken(address _fromToken, address _toToken, uint256 _rate) public onlyOwner {
-        require(_rate > 0, "Rate must be greater than 0");
-        require(_fromToken != _toToken, "fromToken must be different from toToken");
-        require(RateOfTokenPair[_fromToken][_toToken] == 0, "Token pair already exists");
-        RateOfTokenPair[_fromToken][_toToken] = _rate;
-        emit AddTokenIntoContract(_fromToken, _toToken, _rate);
-    }
     function setRate(address _fromToken, address _toToken, uint256 rate) public onlyOwner {
+        require(rate > 0, "Rate must be greater than 0");
+        require(RateOfTokenPair[_fromToken][_toToken] == 0, "Token pair already exists");
+        require(_fromToken != _toToken, "From token and to token must be different");
         RateOfTokenPair[_fromToken][_toToken] = rate;
         emit ChangeRateEvent(_fromToken, _toToken, rate);
     }
