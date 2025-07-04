@@ -23,24 +23,27 @@ contract SwapToken {
 
     function setRate(address _fromToken, address _toToken, uint256 rate) public onlyOwner {
         require(rate > 0, "Rate must be greater than 0");
-        require(RateOfTokenPair[_fromToken][_toToken] == 0, "Token pair already exists");
         require(_fromToken != _toToken, "From token and to token must be different");
-        RateOfTokenPair[_fromToken][_toToken] = rate;
+        RateOfTokenPair[_fromToken][_toToken] = rate * 1e18;
+        RateOfTokenPair[_toToken][_fromToken] = 1e18 / rate;
         emit ChangeRateEvent(_fromToken, _toToken, rate);
     }
     
     function getRate(address _fromToken, address _toToken) public view returns (uint256) {
-        return RateOfTokenPair[_fromToken][_toToken];
+        return RateOfTokenPair[_fromToken][_toToken] / 1e18;
     }
 
     function setFee(uint256 _fee) public onlyOwner {
         fee = _fee;
         emit ChangeFeeEvent(address(this), _fee);
     }
+    function getFee() public view returns (uint256) {
+        return fee;
+    }
 
     function swapToken(address _fromToken, address _toToken, uint256 _amount) public payable {
         require(_amount > 0, "Amount must be greater than 0");
-        require(RateOfTokenPair[_fromToken][_toToken] != 0 || RateOfTokenPair[_toToken][_fromToken] != 0, "Token pair does not exist in contract");
+        require(RateOfTokenPair[_fromToken][_toToken] != 0 , "Token pair does not exist in contract");
 
         //transfer fromToken to contract
         HandleAmountFrom(_fromToken, _amount);
@@ -50,16 +53,16 @@ contract SwapToken {
 
         //transfer received amount to msg.sender 
         HandleAmountTo(_toToken, amountTo);
-        
         emit TokenSwapEvent(_fromToken, _toToken, _amount, amountTo);
     }
 
     function HandleAmountFrom(address _fromToken, uint256 _amount) internal {
         if(_fromToken == address(0)) {
-            require(msg.value == fee + _amount, "Need to pay amount fee to swap token");
+            require(msg.value == fee + _amount, "Need to pay enough amount fee to swap token");
             return;
         }
-        require(msg.value == fee, "Need to pay amount fee to swap token");
+
+        require(msg.value == fee, "Need to pay enough amount fee to swap token");
         require(ERC20(_fromToken).allowance(msg.sender, address(this)) >= _amount, "Account can not have allowance fromToken to contract");
         require(ERC20(_fromToken).transferFrom(msg.sender, address(this), _amount),"Transfer fromToken to contract failed");
     }
@@ -77,17 +80,14 @@ contract SwapToken {
             require(sent, "Error sending native token");
             return;
         } 
+
         require(ERC20(_toToken).balanceOf(address(this)) >= _amount, "Account can not have enough toToken to swap");
         require(ERC20(_toToken).transfer(msg.sender, _amount),"Transfer contract to msg.sender failed");
     }
 
     function calcAmountTo(address _fromToken, address _toToken, uint256 _amount) public view returns (uint256){
         (uint256 fromTokenDecimal, uint256 toTokenDecimal) = GetDecimalsOfTokens(_fromToken, _toToken);
-
-        if (RateOfTokenPair[_fromToken][_toToken] != 0) {
-            return _amount * RateOfTokenPair[_fromToken][_toToken] * (10 ** toTokenDecimal) / (10 ** fromTokenDecimal) ;
-        }
-        return _amount * (10 ** toTokenDecimal) / RateOfTokenPair[_toToken][_fromToken] / (10 ** fromTokenDecimal) ;
+        return _amount * RateOfTokenPair[_fromToken][_toToken] * (10 ** toTokenDecimal) / (10 ** fromTokenDecimal) / 1e18;
     }
     
     receive() external payable {}

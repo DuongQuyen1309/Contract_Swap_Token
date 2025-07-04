@@ -27,8 +27,8 @@ describe("SwapToken", function () {
 
     await myToken1.transferOut(swapToken.target, ethers.parseUnits("50", 18));
     await myToken2.transferOut(swapToken.target, ethers.parseUnits("50", 18));
-    await swapToken.addToken(myToken1.target, myToken2.target, 3);
-    await swapToken.addToken(nativeToken, myToken2.target, 1);
+    await swapToken.setRate(myToken1.target, myToken2.target, 3);
+    await swapToken.setRate(nativeToken, myToken2.target, 1);
   });
 
   it("Success: swap tokens without ETH", async function () {
@@ -39,7 +39,7 @@ describe("SwapToken", function () {
     
     const balance1 = await myToken1.balanceOf(swapToken.target);
     const balance2 = await myToken2.balanceOf(swapToken.target);
-    expect(balance1).to.equal(46666666666666666667n); 
+    expect(balance1).to.equal(46666666666666666670n); 
     expect(balance2).to.equal(60000000000000000000n);
   });
   
@@ -67,18 +67,47 @@ describe("SwapToken", function () {
     expect(balance2).to.equal(40000000000000000000n);
   });
 
-  // it("Fail: Swapping ETH with ERC that have amount = 0", async function () {
-  //   await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-  //   await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-  //   await expect(
-  //   swapToken.connect(addr1).swapToken(myToken2.target, "0x0000000000000000000000000000000000000000", ethers.parseUnits("0", 18), { value: ethers.parseEther("0.001") })
-  //   ).to.be.revertedWith("Amount must be greater than 0");
-  // });
-  // it("Fail: Swapping ETH with ERC that have rate = 0", async function () {
-  //   await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-  //   await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-  //   await expect(
-  //   swapToken.connect(addr1).swapToken("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", "0x0000000000000000000000000000000000000000", ethers.parseUnits("0", 18), { value: ethers.parseEther("0.001") })
-  //   ).to.be.revertedWith("Token pair does not exist in contract");
-  // });
+  it("Success: Set rate > 0", async function () {
+    await swapToken.connect(owner).setRate(myToken1.target, myToken2.target, 5);
+    const storedRate = await swapToken.getRate(myToken1.target, myToken2.target);
+    expect(storedRate).to.equal(5);
+  });
+  it("Success: Set fee ", async function () {
+    const newFee = ethers.parseEther("0.001");
+    await swapToken.connect(owner).setFee(newFee);
+    const storedRate = await swapToken.getFee();
+    expect(storedRate).to.equal(newFee);
+  });
+
+  it("Fail: Swapping ETH with ERC that have amount = 0", async function () {
+    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await expect(
+    swapToken.connect(owner).swapToken(myToken2.target, nativeToken, ethers.parseUnits("0", 18), { value: ethers.parseEther("0.001") })
+    ).to.be.revertedWith("Amount must be greater than 0");
+  });
+
+  it("Fail: Set rate = 0", async function () {
+    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await expect(
+    swapToken.connect(owner).setRate(myToken2.target, myToken1.target, 0)
+    ).to.be.revertedWith("Rate must be greater than 0");
+  });
+
+  it("Fail: swap ETH to receive ERC20 not enough fee ", async function () {
+    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await expect(
+    swapToken.connect(addr1).swapToken(nativeToken,myToken2.target, ethers.parseUnits("10", 18), {value: ethers.parseEther("9.001")})
+    ).to.be.revertedWith("Need to pay enough amount fee to swap token");
+  });
+  
+  it("Fail: swap ETH to receive ERC20 when contract don't have enough erc20", async function () {
+    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    await expect(
+    swapToken.connect(addr1).swapToken(nativeToken,myToken2.target, ethers.parseUnits("100", 18), {value: ethers.parseEther("100.001")})
+    ).to.be.revertedWith("Account can not have enough toToken to swap");
+  });
 });
