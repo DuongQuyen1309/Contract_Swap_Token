@@ -82,6 +82,7 @@ describe("SwapToken", function () {
   it("Fail: Swapping ETH with ERC that have amount = 0", async function () {
     await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
     await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+
     await expect(
     swapToken.connect(owner).swapToken(myToken2.target, nativeToken, ethers.parseUnits("0", 18), { value: ethers.parseEther("0.001") })
     ).to.be.revertedWith("Amount must be greater than 0");
@@ -90,6 +91,7 @@ describe("SwapToken", function () {
   it("Fail: swap ETH to receive ERC20 not enough fee ", async function () {
     await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
     await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+
     await expect(
     swapToken.connect(addr1).swapToken(nativeToken,myToken2.target, ethers.parseUnits("10", 18), {value: ethers.parseEther("9.001")})
     ).to.be.revertedWith("Need to pay enough amount fee to swap token");
@@ -98,6 +100,7 @@ describe("SwapToken", function () {
   it("Fail: swap ETH to receive ERC20 when contract don't have enough erc20", async function () {
     await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
     await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+    
     await expect(
     swapToken.connect(addr1).swapToken(nativeToken,myToken2.target, ethers.parseUnits("100", 18), {value: ethers.parseEther("100.001")})
     ).to.be.revertedWith("Account can not have enough toToken to swap");

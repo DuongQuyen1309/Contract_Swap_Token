@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 contract SwapToken {
     using SafeERC20 for IERC20;
     address payable contractOwner;
-    uint256 public fee ;
+    uint256 public fee; // currently, I will get fee to call swapToken = native token
     struct Rate {
         uint256 numerator;
         uint256 denominator;
@@ -28,7 +28,10 @@ contract SwapToken {
         require(msg.sender == address(contractOwner), "Only owner can call this function");
         _;
     }
-
+    
+    /* I change this function by declare struct Rate with numerator and denominator. Example A-> B is 5. I will
+    call function by setRate(_fromAddress, _toAddress, 5, 1);
+    */
     function setRate(address _fromToken, address _toToken, uint256 _rateOfFrom, uint256 _rateOfTo) public onlyOwner {
         require(_rateOfFrom > 0 && _rateOfTo > 0 , "Rate must be greater than 0");
         require(_fromToken != _toToken, "From token and to token must be different");
