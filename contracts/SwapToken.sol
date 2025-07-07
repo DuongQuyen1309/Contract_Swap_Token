@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract SwapToken {
+    using SafeERC20 for IERC20;
     address payable contractOwner;
     uint256 public fee ;
-    mapping (address => mapping(address => uint256)) public RateOfTokenPair;
+    struct Rate {
+        uint256 numerator;
+        uint256 denominator;
+    }
+    mapping (address => mapping(address => Rate)) public RateOfTokenPair;
+    mapping (address => mapping(address => bool)) public isExists;
     event TokenSwapEvent(address _fromToken, address _toToken, uint256 _fromAmount, uint256 _toAmount);  
-    event ChangeRateEvent(address _fromToken, address _toToken, uint256 _rate);
+    event SetRateEvent(address _fromToken, address _toToken, uint256 _rateOfFrom, uint256 _rateOfTo);
     event ChangeFeeEvent(address _contractAddress, uint256 _fee);
 
     constructor() {
@@ -21,29 +29,32 @@ contract SwapToken {
         _;
     }
 
-    function setRate(address _fromToken, address _toToken, uint256 rate) public onlyOwner {
-        require(rate > 0, "Rate must be greater than 0");
+    function setRate(address _fromToken, address _toToken, uint256 _rateOfFrom, uint256 _rateOfTo) public onlyOwner {
+        require(_rateOfFrom > 0 && _rateOfTo > 0 , "Rate must be greater than 0");
         require(_fromToken != _toToken, "From token and to token must be different");
-        RateOfTokenPair[_fromToken][_toToken] = rate * 1e18;
-        RateOfTokenPair[_toToken][_fromToken] = 1e18 / rate;
-        emit ChangeRateEvent(_fromToken, _toToken, rate);
-    }
-    
-    function getRate(address _fromToken, address _toToken) public view returns (uint256) {
-        return RateOfTokenPair[_fromToken][_toToken] / 1e18;
+        RateOfTokenPair[_fromToken][_toToken] = Rate({numerator: _rateOfFrom, denominator: _rateOfTo});
+        RateOfTokenPair[_toToken][_fromToken] = Rate({numerator: _rateOfTo, denominator: _rateOfFrom});
+        isExists[_fromToken][_toToken] = true;
+        isExists[_toToken][_fromToken] = true;
+        emit SetRateEvent(_fromToken, _toToken, _rateOfFrom, _rateOfTo);
     }
 
     function setFee(uint256 _fee) public onlyOwner {
         fee = _fee;
         emit ChangeFeeEvent(address(this), _fee);
     }
+
+    function getRate(address _fromToken, address _toToken) public view returns (uint256, uint256) {
+        return (RateOfTokenPair[_fromToken][_toToken].numerator, RateOfTokenPair[_fromToken][_toToken].denominator);
+    }
+
     function getFee() public view returns (uint256) {
         return fee;
     }
 
     function swapToken(address _fromToken, address _toToken, uint256 _amount) public payable {
         require(_amount > 0, "Amount must be greater than 0");
-        require(RateOfTokenPair[_fromToken][_toToken] != 0 , "Token pair does not exist in contract");
+        require(isExists[_fromToken][_toToken], "Token pair does not exist in contract");
 
         //transfer fromToken to contract
         HandleAmountFrom(_fromToken, _amount);
@@ -63,13 +74,14 @@ contract SwapToken {
         }
 
         require(msg.value == fee, "Need to pay enough amount fee to swap token");
-        require(ERC20(_fromToken).allowance(msg.sender, address(this)) >= _amount, "Account can not have allowance fromToken to contract");
-        require(ERC20(_fromToken).transferFrom(msg.sender, address(this), _amount),"Transfer fromToken to contract failed");
+        require(IERC20(_fromToken).allowance(msg.sender, address(this)) >= _amount, "Account can not have allowance fromToken to contract");
+        IERC20(_fromToken).safeTransferFrom(msg.sender, address(this), _amount);
+
     }
 
     function GetDecimalsOfTokens(address _fromToken, address _toToken) public view returns (uint256, uint256) {
-        uint256 fromTokenDecimal = (_fromToken == address(0)) ? 18 : ERC20(_fromToken).decimals();
-        uint256 toTokenDecimal = (_toToken == address(0)) ? 18 : ERC20(_toToken).decimals();
+        uint256 fromTokenDecimal = (_fromToken == address(0)) ? 18 : IERC20Metadata(_fromToken).decimals();
+        uint256 toTokenDecimal = (_toToken == address(0)) ? 18 : IERC20Metadata(_toToken).decimals();
         return (fromTokenDecimal, toTokenDecimal);
     }
     
@@ -81,13 +93,14 @@ contract SwapToken {
             return;
         } 
 
-        require(ERC20(_toToken).balanceOf(address(this)) >= _amount, "Account can not have enough toToken to swap");
-        require(ERC20(_toToken).transfer(msg.sender, _amount),"Transfer contract to msg.sender failed");
+        require(IERC20(_toToken).balanceOf(address(this)) >= _amount, "Account can not have enough toToken to swap");
+        IERC20(_toToken).safeTransfer(msg.sender, _amount);
     }
 
     function calcAmountTo(address _fromToken, address _toToken, uint256 _amount) public view returns (uint256){
         (uint256 fromTokenDecimal, uint256 toTokenDecimal) = GetDecimalsOfTokens(_fromToken, _toToken);
-        return _amount * RateOfTokenPair[_fromToken][_toToken] * (10 ** toTokenDecimal) / (10 ** fromTokenDecimal) / 1e18;
+        Rate memory rate = RateOfTokenPair[_fromToken][_toToken];
+        return _amount * rate.numerator * (10 ** toTokenDecimal) / rate.denominator / (10 ** fromTokenDecimal);
     }
     
     receive() external payable {}
