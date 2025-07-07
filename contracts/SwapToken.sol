@@ -60,17 +60,17 @@ contract SwapToken {
         require(isExists[_fromToken][_toToken], "Token pair does not exist in contract");
 
         //transfer fromToken to contract
-        HandleAmountFrom(_fromToken, _amount);
+        handleAmountFrom(_fromToken, _amount);
 
         //calculate received amount of toToken
         uint256 amountTo = calcAmountTo(_fromToken, _toToken, _amount);
 
         //transfer received amount to msg.sender 
-        HandleAmountTo(_toToken, amountTo);
+        handleAmountTo(_toToken, amountTo);
         emit TokenSwapEvent(_fromToken, _toToken, _amount, amountTo);
     }
 
-    function HandleAmountFrom(address _fromToken, uint256 _amount) internal {
+    function handleAmountFrom(address _fromToken, uint256 _amount) internal {
         if(_fromToken == address(0)) {
             require(msg.value == fee + _amount, "Need to pay enough amount fee to swap token");
             return;
@@ -82,13 +82,13 @@ contract SwapToken {
 
     }
 
-    function GetDecimalsOfTokens(address _fromToken, address _toToken) public view returns (uint256, uint256) {
+    function getDecimalsOfTokens(address _fromToken, address _toToken) public view returns (uint256, uint256) {
         uint256 fromTokenDecimal = (_fromToken == address(0)) ? 18 : IERC20Metadata(_fromToken).decimals();
         uint256 toTokenDecimal = (_toToken == address(0)) ? 18 : IERC20Metadata(_toToken).decimals();
         return (fromTokenDecimal, toTokenDecimal);
     }
     
-    function HandleAmountTo(address _toToken, uint256 _amount) internal {
+    function handleAmountTo(address _toToken, uint256 _amount) internal {
         if (_toToken == address(0)) {
             require(address(this).balance >= _amount, "Contract can not have enough ETH to swap");
             (bool sent,) = msg.sender.call{value: _amount}("");
@@ -101,7 +101,7 @@ contract SwapToken {
     }
 
     function calcAmountTo(address _fromToken, address _toToken, uint256 _amount) public view returns (uint256){
-        (uint256 fromTokenDecimal, uint256 toTokenDecimal) = GetDecimalsOfTokens(_fromToken, _toToken);
+        (uint256 fromTokenDecimal, uint256 toTokenDecimal) = getDecimalsOfTokens(_fromToken, _toToken);
         Rate memory rate = RateOfTokenPair[_fromToken][_toToken];
         return _amount * rate.numerator * (10 ** toTokenDecimal) / rate.denominator / (10 ** fromTokenDecimal);
     }
