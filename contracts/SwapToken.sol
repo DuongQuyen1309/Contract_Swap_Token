@@ -21,7 +21,7 @@ contract SwapToken {
 
     constructor() {
         contractOwner = msg.sender;
-        fee = 10; // 10%
+        fee = 1; // 0.1% 
     }
 
     modifier onlyOwner {
@@ -92,9 +92,9 @@ contract SwapToken {
     }
 
     function calcAmountTo(address _fromToken, address _toToken, uint256 _amount) public view returns (uint256){
-        Rate memory rate = rateOfTokenPair[_fromToken][_toToken];
+        Rate memory rate = rateOfTokenPair[_toToken][_fromToken];
         uint256 amountToNotFee = _amount * rate.numerator / rate.denominator;
-        return amountToNotFee * (100 - fee) / 100;
+        return amountToNotFee * (1000 - fee) / 1000;
     }
     
     receive() external payable {}
