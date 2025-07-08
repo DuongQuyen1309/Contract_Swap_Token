@@ -4,6 +4,138 @@ const { ethers } = require("hardhat");
 describe("SwapToken", function () {
   let swapToken, myToken1, myToken2, owner, addr1;
   const nativeToken = "0x0000000000000000000000000000000000000000";
+  const successTestCasesForSwap = [
+    {
+      name: "Success: swap tokens without ETH",
+      fromToken: () => myToken2.target,
+      toToken: () => myToken1.target,
+      amount: ethers.parseUnits("10", 18),
+      value: 0,
+      expectedBalance1: 47000000000000000001n,
+      expectedBalance2: 60000000000000000000n,
+    },
+    {
+      name: "Success: swap ERC token to receive ETH",
+      fromToken: () => myToken2.target,
+      toToken: () => nativeToken,
+      amount: ethers.parseUnits("10", 18),
+      value: 0,
+      expectedBalance1: 50000000000000000000n,
+      expectedBalance2: 60000000000000000000n,
+    },
+    {
+      name: "Success: swap ETH to receive ERC20",
+      fromToken: () => nativeToken,
+      toToken: () => myToken2.target,
+      amount: ethers.parseUnits("10", 18),
+      value: ethers.parseEther("10"),
+      expectedBalance1: 50000000000000000000n,
+      expectedBalance2: 41000000000000000000n,
+    },
+    {
+      name: "Success: swap tokens without ETH",
+      fromToken: () => nativeToken,
+      toToken: () => myToken1.target,
+      amount: ethers.parseUnits("1", 18),
+      value: ethers.parseEther("1"),
+      expectedBalance1: 5000000000000000000n,
+      expectedBalance2: 50000000000000000000n,
+    },
+  ];
+  const successTestCasesForSetRate = [
+    {
+      name: "Success: Rate > 0",
+      fromToken: () => myToken2.target,
+      toToken: () => nativeToken,
+      caller: () => owner,
+      rateOfFrom: 8,
+      rateOfTo: 9,
+      expectRateOfFrom: 8,
+      expectRateOfTo:9,
+    },
+  ];
+  const successTestCasesForSetFee = [
+    {
+      name: "Success: Fee < 100",
+      caller: () => owner,
+      fee : 89,
+      expectFee: 89,
+    },
+  ];
+  
+  const failTestCasesForSwap = [
+    {
+      name: "Fail: Swapping with amount = 0",
+      fromToken: () => myToken2.target,
+      toToken: () => nativeToken,
+      amount: ethers.parseUnits("0", 18),
+      value: 0,
+      caller: () => owner,
+      expectMessage: "Amount must be greater than 0",
+    },
+    {
+      name: "Fail: Swap ETH to ERC20 not enough fee",
+      fromToken: () => nativeToken,
+      toToken: () => myToken2.target,
+      amount: ethers.parseUnits("10", 18),
+      value: ethers.parseEther("9"),
+      caller: () => addr1,
+      expectMessage: "Need to pay enough amount fee to swap token",
+    },
+    {
+      name: "Fail: Swap ETH to ERC20 when contract doesn't have enough token",
+      fromToken: () => nativeToken,
+      toToken: () => myToken2.target,
+      amount: ethers.parseUnits("100", 18),
+      value: ethers.parseEther("100"),
+      caller: () => addr1,
+      expectMessage: "Account can not have enough toToken to swap",
+    }
+  ];
+  const failTestCasesForSetRate = [
+    {
+      name: "Fail: Rate rateOfFrom < 0 and rateOfTo < 0",
+      fromToken: () => myToken2.target,
+      toToken: () => nativeToken,
+      rateOfFrom: 0,
+      rateOfTo: 0,
+      caller: () => owner,
+      expectMessage: "Rate must be greater than 0",
+    },
+    {
+      name: "Fail: Rate rateOfFrom < 0 or rateOfTo < 0",
+      fromToken: () => myToken2.target,
+      toToken: () => nativeToken,
+      rateOfFrom: 0,
+      rateOfTo: 9,
+      caller: () => owner,
+      expectMessage: "Rate must be greater than 0",
+    },
+    {
+      name: "Fail: Set fromToken = toToken",
+      fromToken: () => nativeToken,
+      toToken: () => nativeToken,
+      rateOfFrom: 8,
+      rateOfTo: 9,
+      caller: () => owner,
+      expectMessage: "From token and to token must be different",
+    }
+  ];
+
+  const failTestCasesForSetFee = [
+    {
+      name: "Fail: Fee > 100",
+      caller: () => owner,
+      fee : 190,
+      expectMessage: "Fee must be less than 100",
+    },
+    {
+      name: "Fail: user is not owner",
+      caller: () => addr1,
+      fee : 89,
+      expectMessage: "Only owner can call this function",
+    }
+  ];
 
   beforeEach(async function () {
     [owner, addr1] = await ethers.getSigners();
@@ -25,92 +157,88 @@ describe("SwapToken", function () {
     });
     await myToken1.transfer(swapToken.target, ethers.parseUnits("50", 18));
     await myToken2.transfer(swapToken.target, ethers.parseUnits("50", 18));
-    await swapToken.setRate(myToken1.target, myToken2.target, 3, 1);
-    await swapToken.setRate(nativeToken, myToken2.target, 1, 1);
+
+    const IERC20MetadataOfToken1 = await ethers.getContractAt("IERC20Metadata", myToken1.target);
+    const decimalsOfToken1 = await IERC20MetadataOfToken1.decimals();
+
+    const IERC20MetadataOfToken2 = await ethers.getContractAt("IERC20Metadata", myToken2.target);
+    const decimalsOfToken2 = await IERC20MetadataOfToken2.decimals();
+
+    await swapToken.setRate(myToken1.target, myToken2.target, 3n * ethers.parseUnits("1", decimalsOfToken1), 1n *ethers.parseUnits("1", decimalsOfToken2));
+    await swapToken.setRate(nativeToken, myToken2.target, 1n * ethers.parseUnits("1", 18), 1n * ethers.parseUnits("1", decimalsOfToken2));
+    await swapToken.setRate(nativeToken, myToken1.target, 50n * ethers.parseUnits("1", 18), 1n * ethers.parseUnits("1", decimalsOfToken1));
   });
 
-  it("Success: swap tokens without ETH", async function () {
-    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+  successTestCasesForSwap.forEach((test) => {
+    it(test.name, async function () {
+      await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+      await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
 
-    await swapToken.connect(addr1).swapToken(myToken2.target,myToken1.target, ethers.parseUnits("10", 18), {value: ethers.parseEther("0.001")});
-    
-    const balance1 = await myToken1.balanceOf(swapToken.target);
-    const balance2 = await myToken2.balanceOf(swapToken.target);
-    expect(balance1).to.equal(46666666666666666667n); 
-    expect(balance2).to.equal(60000000000000000000n);
+      await swapToken.connect(addr1).swapToken(
+        test.fromToken(),
+        test.toToken(),
+        test.amount,
+        { value: test.value }
+      );
+
+      const balance1 = await myToken1.balanceOf(swapToken.target);
+      const balance2 = await myToken2.balanceOf(swapToken.target);
+
+      expect(balance1).to.equal(test.expectedBalance1);
+      expect(balance2).to.equal(test.expectedBalance2);
+    });
+  });
+  successTestCasesForSetRate.forEach((test) => {
+    it(test.name, async function () {
+      await swapToken.connect(test.caller()).setRate(test.fromToken(), test.toToken(), test.rateOfFrom, test.rateOfTo);
+      const [storedRateOfFrom, storedRateOfTo] = await swapToken.getRate(test.fromToken(), test.toToken());
+      expect(storedRateOfFrom).to.equal(test.expectRateOfFrom);
+      expect(storedRateOfTo).to.equal(test.expectRateOfTo);
+    });
+  })
+
+  successTestCasesForSetFee.forEach((test) => {
+    it(test.name, async function () {
+      await swapToken.connect(test.caller()).setFee(test.fee);
+      const storeFee = await swapToken.getFee();
+      expect(storeFee).to.equal(test.expectFee);
+    });
+  })
+
+  failTestCasesForSwap.forEach((test) => {
+    it(test.name, async function () {
+      await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+      await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
+
+      await expect(
+        swapToken.connect(test.caller()).swapToken(
+          test.fromToken(),
+          test.toToken(),
+          test.amount,
+          { value: test.value }
+        )
+      ).to.be.revertedWith(test.expectMessage);
+    });
   });
 
-  it("Success:swap ERC token to receive ETH", async function () {
-    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-
-    await swapToken.connect(addr1).swapToken(myToken2.target, nativeToken, ethers.parseUnits("10", 18), {value: ethers.parseEther("0.001")});
-
-    const balance1 = await myToken1.balanceOf(swapToken.target);
-    const balance2 = await myToken2.balanceOf(swapToken.target);
-    expect(balance1).to.equal(50000000000000000000n); 
-    expect(balance2).to.equal(60000000000000000000n);
+  failTestCasesForSetRate.forEach((test) => {
+    it(test.name, async function () {
+      await expect(
+        swapToken.connect(test.caller()).setRate(
+          test.fromToken(),
+          test.toToken(),
+          test.rateOfFrom,
+          test.rateOfTo,
+        )
+      ).to.be.revertedWith(test.expectMessage);
+    });
   });
 
-  it("Success: swap ETH to receive ERC20 ", async function () {
-    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    
-    await swapToken.connect(addr1).swapToken(nativeToken,myToken2.target, ethers.parseUnits("10", 18), {value: ethers.parseEther("10.001")});
-    
-    const balance1 = await myToken1.balanceOf(swapToken.target);
-    const balance2 = await myToken2.balanceOf(swapToken.target);
-    expect(balance1).to.equal(50000000000000000000n); 
-    expect(balance2).to.equal(40000000000000000000n);
-  });
-
-  it("Success: Set fee ", async function () {
-    const newFee = ethers.parseEther("0.001");
-    await swapToken.connect(owner).setFee(newFee);
-    const storedRate = await swapToken.getFee();
-    expect(storedRate).to.equal(newFee);
-  });
-
-  it("Success: Set rate > 0", async function () {
-    await swapToken.connect(owner).setRate(myToken1.target, myToken2.target, 5, 1);
-    const [storedRateOfFrom, storedRateOfTo] = await swapToken.getRate(myToken1.target, myToken2.target);
-    expect(storedRateOfFrom).to.equal(5);
-    expect(storedRateOfTo).to.equal(1);
-  });
-
-  it("Fail: Swapping ETH with ERC that have amount = 0", async function () {
-    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-
-    await expect(
-    swapToken.connect(owner).swapToken(myToken2.target, nativeToken, ethers.parseUnits("0", 18), { value: ethers.parseEther("0.001") })
-    ).to.be.revertedWith("Amount must be greater than 0");
-  });
-
-  it("Fail: swap ETH to receive ERC20 not enough fee ", async function () {
-    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-
-    await expect(
-    swapToken.connect(addr1).swapToken(nativeToken,myToken2.target, ethers.parseUnits("10", 18), {value: ethers.parseEther("9.001")})
-    ).to.be.revertedWith("Need to pay enough amount fee to swap token");
-  });
-  
-  it("Fail: swap ETH to receive ERC20 when contract don't have enough erc20", async function () {
-    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    
-    await expect(
-    swapToken.connect(addr1).swapToken(nativeToken,myToken2.target, ethers.parseUnits("100", 18), {value: ethers.parseEther("100.001")})
-    ).to.be.revertedWith("Account can not have enough toToken to swap");
-  });
-
-  it("Fail: set rate = 0", async function () {
-    await myToken1.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    await myToken2.connect(addr1).approve(swapToken.target, ethers.parseUnits("50", 18));
-    await expect(
-    swapToken.connect(owner).setRate(myToken1.target, myToken2.target, 0, 0)
-    ).to.be.revertedWith("Rate must be greater than 0");
+  failTestCasesForSetFee.forEach((test) => {
+    it(test.name, async function () {
+      await expect(
+       swapToken.connect(test.caller()).setFee(test.fee)
+      ).to.be.revertedWith(test.expectMessage);
+    });
   });
 });
