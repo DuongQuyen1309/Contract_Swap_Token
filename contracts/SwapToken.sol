@@ -7,21 +7,21 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract SwapToken {
     using SafeERC20 for IERC20;
-    address payable contractOwner;
-    uint256 public fee; // currently, I will get fee to call swapToken = native token
+    address contractOwner;
+    uint256 public fee; 
     struct Rate {
         uint256 numerator;
         uint256 denominator;
     }
-    mapping (address => mapping(address => Rate)) public RateOfTokenPair;
+    mapping (address => mapping(address => Rate)) public rateOfTokenPair;
     mapping (address => mapping(address => bool)) public isExists;
     event TokenSwapEvent(address _fromToken, address _toToken, uint256 _fromAmount, uint256 _toAmount);  
     event SetRateEvent(address _fromToken, address _toToken, uint256 _rateOfFrom, uint256 _rateOfTo);
     event ChangeFeeEvent(address _contractAddress, uint256 _fee);
 
     constructor() {
-        contractOwner = payable(msg.sender);
-        fee = 0.001 ether;
+        contractOwner = msg.sender;
+        fee = 1; // 0.1% 
     }
 
     modifier onlyOwner {
@@ -35,20 +35,21 @@ contract SwapToken {
     function setRate(address _fromToken, address _toToken, uint256 _rateOfFrom, uint256 _rateOfTo) public onlyOwner {
         require(_rateOfFrom > 0 && _rateOfTo > 0 , "Rate must be greater than 0");
         require(_fromToken != _toToken, "From token and to token must be different");
-        RateOfTokenPair[_fromToken][_toToken] = Rate({numerator: _rateOfFrom, denominator: _rateOfTo});
-        RateOfTokenPair[_toToken][_fromToken] = Rate({numerator: _rateOfTo, denominator: _rateOfFrom});
+        rateOfTokenPair[_fromToken][_toToken] = Rate({numerator: _rateOfFrom, denominator: _rateOfTo});
+        rateOfTokenPair[_toToken][_fromToken] = Rate({numerator: _rateOfTo, denominator: _rateOfFrom});
         isExists[_fromToken][_toToken] = true;
         isExists[_toToken][_fromToken] = true;
         emit SetRateEvent(_fromToken, _toToken, _rateOfFrom, _rateOfTo);
     }
 
     function setFee(uint256 _fee) public onlyOwner {
+        require(_fee < 100, "Fee must be less than 100");
         fee = _fee;
         emit ChangeFeeEvent(address(this), _fee);
     }
 
     function getRate(address _fromToken, address _toToken) public view returns (uint256, uint256) {
-        return (RateOfTokenPair[_fromToken][_toToken].numerator, RateOfTokenPair[_fromToken][_toToken].denominator);
+        return (rateOfTokenPair[_fromToken][_toToken].numerator, rateOfTokenPair[_fromToken][_toToken].denominator);
     }
 
     function getFee() public view returns (uint256) {
@@ -72,20 +73,10 @@ contract SwapToken {
 
     function handleAmountFrom(address _fromToken, uint256 _amount) internal {
         if(_fromToken == address(0)) {
-            require(msg.value == fee + _amount, "Need to pay enough amount fee to swap token");
+            require(msg.value == _amount, "Need to pay enough amount fee to swap token");
             return;
         }
-
-        require(msg.value == fee, "Need to pay enough amount fee to swap token");
-        require(IERC20(_fromToken).allowance(msg.sender, address(this)) >= _amount, "Account can not have allowance fromToken to contract");
         IERC20(_fromToken).safeTransferFrom(msg.sender, address(this), _amount);
-
-    }
-
-    function getDecimalsOfTokens(address _fromToken, address _toToken) public view returns (uint256, uint256) {
-        uint256 fromTokenDecimal = (_fromToken == address(0)) ? 18 : IERC20Metadata(_fromToken).decimals();
-        uint256 toTokenDecimal = (_toToken == address(0)) ? 18 : IERC20Metadata(_toToken).decimals();
-        return (fromTokenDecimal, toTokenDecimal);
     }
     
     function handleAmountTo(address _toToken, uint256 _amount) internal {
@@ -101,9 +92,9 @@ contract SwapToken {
     }
 
     function calcAmountTo(address _fromToken, address _toToken, uint256 _amount) public view returns (uint256){
-        (uint256 fromTokenDecimal, uint256 toTokenDecimal) = getDecimalsOfTokens(_fromToken, _toToken);
-        Rate memory rate = RateOfTokenPair[_fromToken][_toToken];
-        return _amount * rate.numerator * (10 ** toTokenDecimal) / rate.denominator / (10 ** fromTokenDecimal);
+        Rate memory rate = rateOfTokenPair[_toToken][_fromToken];
+        uint256 amountToNotFee = _amount * rate.numerator / rate.denominator;
+        return amountToNotFee * (1000 - fee) / 1000;
     }
     
     receive() external payable {}
