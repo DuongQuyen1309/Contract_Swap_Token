@@ -11,8 +11,8 @@ describe("SwapToken", function () {
       toToken: () => myToken1.target,
       amount: ethers.parseUnits("10", 18),
       value: 0,
-      expectedBalance1: 47000000000000000001n,
-      expectedBalance2: 60000000000000000000n,
+      expectedBalance1: ethers.parseUnits("47", 18),
+      expectedBalance2: ethers.parseUnits("60", 18),
     },
     {
       name: "Success: swap ERC token to receive ETH",
@@ -20,8 +20,8 @@ describe("SwapToken", function () {
       toToken: () => nativeToken,
       amount: ethers.parseUnits("10", 18),
       value: 0,
-      expectedBalance1: 50000000000000000000n,
-      expectedBalance2: 60000000000000000000n,
+      expectedBalance1: ethers.parseUnits("50", 18),
+      expectedBalance2: ethers.parseUnits("60", 18),
     },
     {
       name: "Success: swap ETH to receive ERC20",
@@ -29,8 +29,8 @@ describe("SwapToken", function () {
       toToken: () => myToken2.target,
       amount: ethers.parseUnits("10", 18),
       value: ethers.parseEther("10"),
-      expectedBalance1: 50000000000000000000n,
-      expectedBalance2: 41000000000000000000n,
+      expectedBalance1: ethers.parseUnits("50", 18),
+      expectedBalance2: ethers.parseUnits("41", 18),
     },
     {
       name: "Success: swap tokens without ETH",
@@ -38,8 +38,8 @@ describe("SwapToken", function () {
       toToken: () => myToken1.target,
       amount: ethers.parseUnits("1", 18),
       value: ethers.parseEther("1"),
-      expectedBalance1: 5000000000000000000n,
-      expectedBalance2: 50000000000000000000n,
+      expectedBalance1: ethers.parseUnits("5", 18),
+      expectedBalance2: ethers.parseUnits("50", 18),
     },
   ];
   const successTestCasesForSetRate = [
